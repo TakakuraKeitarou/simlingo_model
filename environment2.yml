@@ -1,4 +1,4 @@
-name: kei_sim
+name: k_sim2
 channels:
   - nvidia/label/cuda-12.8.0
   - defaults
@@ -154,7 +154,6 @@ dependencies:
       - elementpath==5.0.4
       - ephem==4.2
       - filterpy==1.4.5
-      - flash-attn==2.8.3
       - fonttools==4.60.1
       - frozenlist==1.8.0
       - h11==0.16.0
@@ -222,4 +221,6 @@ dependencies:
       - xmlschema==4.2.0
       - xxhash==3.6.0
       - yarl==1.22.0
+      - flash-attn==2.8.3
+
 prefix: /home/noah-22/miniconda3/envs/kei_sim

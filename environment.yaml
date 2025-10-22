@@ -1,4 +1,4 @@
-name: kei_sim
+name: k_sim
 channels:
   - conda-forge
   - defaults
@@ -40,5 +40,4 @@ dependencies:
     - sentencepiece 
     - protobuf
     - peft
-    - flash-attn
     - bitsandbytes
