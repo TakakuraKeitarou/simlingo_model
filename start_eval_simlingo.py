@@ -5,8 +5,6 @@ import time
 import ujson
 import shutil
 from tqdm.autonotebook import tqdm
-import threading
-import queue
 
 # %%
 def run_bench2drive_evaluation(job, port, tm_port):
@@ -23,20 +21,14 @@ def run_bench2drive_evaluation(job, port, tm_port):
     # 環境変数の設定
     env = os.environ.copy()
     
-    # パスを絶対パスに展開
-    carla_root = "/home/noah-22/software/carla0915"
-    work_dir = cfg["repo_root"]
-    
     # PYTHONPATHを正しく設定
-    # 重要: 順序が重要です！work_dirを最初に配置
     python_paths = [
-        work_dir,  # /mnt/data/ktr_ktr/simlingo - team_codeとsimlingo_trainingの親ディレクトリ
-        f"{work_dir}/team_code",  # team_code自体も追加（念のため）
-        f"{carla_root}/PythonAPI/carla",
-        # f"{carla_root}/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg",
-        f"{work_dir}/Bench2Drive",  # Bench2Driveのルートも追加
-        f"{work_dir}/Bench2Drive/scenario_runner",
-        f"{work_dir}/Bench2Drive/leaderboard",
+        cfg["repo_root"],
+        f"{cfg['repo_root']}/team_code",
+        f"{cfg['carla_root']}/PythonAPI/carla",
+        f"{cfg['repo_root']}/Bench2Drive",
+        f"{cfg['repo_root']}/Bench2Drive/scenario_runner",
+        f"{cfg['repo_root']}/Bench2Drive/leaderboard",
     ]
     
     # 既存のPYTHONPATHがあれば追加
@@ -46,21 +38,19 @@ def run_bench2drive_evaluation(job, port, tm_port):
             if path and path not in python_paths:
                 python_paths.append(path)
     
-    # PYTHONPATH文字列を作成
-    pythonpath_str = ':'.join(python_paths)
-    
+    # 環境変数を更新
     env.update({
-        'CARLA_ROOT': carla_root,
-        'WORK_DIR': work_dir,
-        'PYTHONPATH': pythonpath_str,
-        'SCENARIO_RUNNER_ROOT': f"{work_dir}/Bench2Drive/scenario_runner",
-        'LEADERBOARD_ROOT': f"{work_dir}/Bench2Drive/leaderboard",
+        'CARLA_ROOT': cfg['carla_root'],
+        'WORK_DIR': cfg['repo_root'],
+        'PYTHONPATH': ':'.join(python_paths),
+        'SCENARIO_RUNNER_ROOT': f"{cfg['repo_root']}/Bench2Drive/scenario_runner",
+        'LEADERBOARD_ROOT': f"{cfg['repo_root']}/Bench2Drive/leaderboard",
         'SAVE_PATH': viz_path,
-        'TEAM_CODE_ROOT': f"{work_dir}/team_code",  # 追加の環境変数
+        'TEAM_CODE_ROOT': f"{cfg['repo_root']}/team_code",
     })
     
     # デバッグ用：環境変数をログに出力
-    with open(log_file, 'w') as f:  # 'w'モードで新規作成
+    with open(log_file, 'w') as f:
         f.write("="*70 + "\n")
         f.write(f"JOB CONFIGURATION\n")
         f.write("="*70 + "\n")
@@ -78,7 +68,6 @@ def run_bench2drive_evaluation(job, port, tm_port):
         f.write(f"LEADERBOARD_ROOT: {env['LEADERBOARD_ROOT']}\n")
         f.write(f"SAVE_PATH: {env['SAVE_PATH']}\n")
         f.write("\nPYTHONPATH entries:\n")
-        print(path)
         for i, path in enumerate(python_paths, 1):
             f.write(f"  {i}. {path}\n")
             # パスが存在するかチェック
@@ -113,9 +102,9 @@ def run_bench2drive_evaluation(job, port, tm_port):
     # 重要なファイルの存在確認
     important_files = [
         cfg['agent_file'],
-        f"{work_dir}/team_code/__init__.py",
-        f"{work_dir}/team_code/config_simlingo.py",
-        f"{work_dir}/simlingo_training/__init__.py",
+        f"{cfg['repo_root']}/team_code/__init__.py",
+        f"{cfg['repo_root']}/team_code/config_simlingo.py",
+        f"{cfg['repo_root']}/simlingo_training/__init__.py",
     ]
     
     for file_path in important_files:
@@ -137,12 +126,12 @@ def run_bench2drive_evaluation(job, port, tm_port):
             # プロセスを実行
             process = subprocess.run(
                 cmd,
-                cwd=cfg["repo_root"],  # 作業ディレクトリをsimlingoのルートに設定
+                cwd=cfg["repo_root"],
                 env=env,
                 stdout=log_f,
                 stderr=err_f,
                 timeout=3*60*60,  # 3時間のタイムアウト
-                check=False  # エラーが発生してもExceptionを投げない
+                check=False
             )
             
             # 終了コードをチェック
@@ -159,7 +148,7 @@ def run_bench2drive_evaluation(job, port, tm_port):
                         error_content = err_read.read()
                         if error_content:
                             print("\n--- エラー内容（最初の1000文字）---")
-                            print(error_content)
+                            print(error_content[:1000])
                             print("--- エラー内容ここまで ---\n")
                             
                             # エラーファイルに追記
@@ -200,7 +189,6 @@ def filter_completed(jobs):
     filtered_jobs = []
 
     for job in jobs:
-        # 失敗したジョブを再実行するかチェック
         result_file = job["result_file"]
         if os.path.exists(result_file):
             try:
@@ -223,120 +211,130 @@ def filter_completed(jobs):
 
             if need_to_resubmit and job["tries"] > 0:
                 filtered_jobs.append(job)
-        # 結果ファイルが存在しない
         elif job["tries"] > 0:
             filtered_jobs.append(job)
+            
     return filtered_jobs
 
 # %%
-# 設定
-configs = [
-    {
-        "agent": "simlingo",
-        "checkpoint": "simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt",
-        "benchmark": "bench2drive",
-        "route_path": "/home/noah-22/kei_ws/model_simlingo/leaderboard/data/bench2drive_split",
-        "seeds": [1, 2, 3],
-        "tries": 2,
-        "out_root": "eval_results/Bench2Drive",
-        "carla_root": "/home/noah-22/software/carla0915",  # 絶対パスに変更
-        "repo_root": "/home/noah-22/kei_ws/model_simlingo",
-        "agent_file": "/home/noah-22/kei_ws/model_simlingo/team_code/agent_simlingo.py",
-        "team_code": "team_code",
-        "agent_config": "not_used"
-    }
-]
-
-# %%
-# ジョブキューの作成
-job_queue = []
-for cfg_idx, cfg in enumerate(configs):
-    route_path = cfg["route_path"]
-    routes = [x for x in os.listdir(route_path) if x[-4:] == ".xml"]
-
-    if cfg["benchmark"] == "bench2drive":
-        fill_zeros = 3
-    else: 
-        fill_zeros = 2
-
-    for seed in cfg["seeds"]:
-        seed = str(seed)
-
-        base_dir = os.path.join(cfg["out_root"], cfg["agent"], cfg["benchmark"], seed)
-        os.makedirs(os.path.join(base_dir, "run"), exist_ok=True)
-        os.makedirs(os.path.join(base_dir, "res"), exist_ok=True)
-        os.makedirs(os.path.join(base_dir, "out"), exist_ok=True)
-        os.makedirs(os.path.join(base_dir, "err"), exist_ok=True)
-
-        for route in routes:
-            route_id = route.split("_")[-1][:-4].zfill(fill_zeros)
-            route = os.path.join(route_path, route)
-
-            viz_path = os.path.join(base_dir, "viz", route_id)
-            os.makedirs(viz_path, exist_ok=True)
-
-            result_file = os.path.join(base_dir, "res", f"{route_id}_res.json")
-            log_file = os.path.join(base_dir, "out", f"{route_id}_out.log")
-            err_file = os.path.join(base_dir, "err", f"{route_id}_err.log")
-            
-            job = {
-                "cfg": cfg,
-                "route": route,
-                "route_id": route_id,
-                "seed": seed,
-                "viz_path": viz_path,
-                "result_file": result_file,
-                "log_file": log_file,
-                "err_file": err_file,
-                "tries": cfg["tries"]
-            }
-
-            job_queue.append(job)
-
-# %%
-# ポート設定（単一のプロセスなので固定ポート使用）
-carla_world_port = 10000
-carla_tm_port = 8000
-
-# %%
-# ジョブの実行
-jobs = len(job_queue)
-progress = tqdm(total=jobs)
-
-while job_queue:
-    job_queue = filter_completed(job_queue)
-    progress.update(jobs - len(job_queue) - progress.n)
+def load_config():
+    """環境変数から設定を読み込む（デフォルト値付き）"""
+    # リポジトリルートを取得（このスクリプトがrepo_root直下にあると仮定）
+    default_repo_root = os.path.dirname(os.path.abspath(__file__))
     
-    if not job_queue:
-        break
+    repo_root = os.environ.get('REPO_ROOT', default_repo_root)
+    carla_root = os.environ.get('CARLA_ROOT', '/path/to/carla')
+    
+    configs = [
+        {
+            "agent": "simlingo",
+            "checkpoint": "simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt",
+            "benchmark": "bench2drive",
+            "route_path": os.path.join(repo_root, "leaderboard/data/bench2drive_split"),
+            "seeds": [1, 2, 3],
+            "tries": 2,
+            "out_root": "eval_results/Bench2Drive",
+            "carla_root": carla_root,
+            "repo_root": repo_root,
+            "agent_file": os.path.join(repo_root, "team_code/agent_simlingo.py"),
+            "team_code": "team_code",
+            "agent_config": "not_used"
+        }
+    ]
+    
+    return configs
 
-    for job in job_queue:
-        if job["tries"] <= 0:
-            continue
+# %%
+if __name__ == "__main__":
+    # 設定の読み込み
+    configs = load_config()
+    
+    # ジョブキューの作成
+    job_queue = []
+    for cfg_idx, cfg in enumerate(configs):
+        route_path = cfg["route_path"]
+        routes = [x for x in os.listdir(route_path) if x[-4:] == ".xml"]
 
-        # vizディレクトリをクリーンアップ
-        if os.path.exists(job["viz_path"]):
-            shutil.rmtree(job["viz_path"])
-        os.makedirs(job["viz_path"], exist_ok=True)
+        if cfg["benchmark"] == "bench2drive":
+            fill_zeros = 3
+        else: 
+            fill_zeros = 2
 
-        # Bench2Drive評価の実行
-        if job["cfg"]["benchmark"].lower() == "bench2drive":
-            success = run_bench2drive_evaluation(job, carla_world_port, carla_tm_port)
-        else:
-            raise NotImplementedError(f"Benchmark {job['cfg']['benchmark']} not implemented.")
+        for seed in cfg["seeds"]:
+            seed = str(seed)
 
-        job["tries"] -= 1
+            base_dir = os.path.join(cfg["out_root"], cfg["agent"], cfg["benchmark"], seed)
+            os.makedirs(os.path.join(base_dir, "run"), exist_ok=True)
+            os.makedirs(os.path.join(base_dir, "res"), exist_ok=True)
+            os.makedirs(os.path.join(base_dir, "out"), exist_ok=True)
+            os.makedirs(os.path.join(base_dir, "err"), exist_ok=True)
+
+            for route in routes:
+                route_id = route.split("_")[-1][:-4].zfill(fill_zeros)
+                route = os.path.join(route_path, route)
+
+                viz_path = os.path.join(base_dir, "viz", route_id)
+                os.makedirs(viz_path, exist_ok=True)
+
+                result_file = os.path.join(base_dir, "res", f"{route_id}_res.json")
+                log_file = os.path.join(base_dir, "out", f"{route_id}_out.log")
+                err_file = os.path.join(base_dir, "err", f"{route_id}_err.log")
+                
+                job = {
+                    "cfg": cfg,
+                    "route": route,
+                    "route_id": route_id,
+                    "seed": seed,
+                    "viz_path": viz_path,
+                    "result_file": result_file,
+                    "log_file": log_file,
+                    "err_file": err_file,
+                    "tries": cfg["tries"]
+                }
+
+                job_queue.append(job)
+
+    # ポート設定
+    carla_world_port = 10000
+    carla_tm_port = 8000
+
+    # ジョブの実行
+    jobs = len(job_queue)
+    progress = tqdm(total=jobs)
+
+    while job_queue:
+        job_queue = filter_completed(job_queue)
+        progress.update(jobs - len(job_queue) - progress.n)
         
-        if success:
-            print(f'完了: {job["route_id"]}')
-        else:
-            print(f'失敗: {job["route_id"]} (残り試行回数: {job["tries"]})')
-        
-        # 少し待機してからログファイルをチェック
-        time.sleep(2)
-        break
+        if not job_queue:
+            break
 
-    time.sleep(1)
+        for job in job_queue:
+            if job["tries"] <= 0:
+                continue
 
-progress.close()
-print("すべてのジョブが完了しました。")
+            # vizディレクトリをクリーンアップ
+            if os.path.exists(job["viz_path"]):
+                shutil.rmtree(job["viz_path"])
+            os.makedirs(job["viz_path"], exist_ok=True)
+
+            # Bench2Drive評価の実行
+            if job["cfg"]["benchmark"].lower() == "bench2drive":
+                success = run_bench2drive_evaluation(job, carla_world_port, carla_tm_port)
+            else:
+                raise NotImplementedError(f"Benchmark {job['cfg']['benchmark']} not implemented.")
+
+            job["tries"] -= 1
+            
+            if success:
+                print(f'完了: {job["route_id"]}')
+            else:
+                print(f'失敗: {job["route_id"]} (残り試行回数: {job["tries"]})')
+            
+            time.sleep(2)
+            break
+
+        time.sleep(1)
+
+    progress.close()
+    print("すべてのジョブが完了しました。")
