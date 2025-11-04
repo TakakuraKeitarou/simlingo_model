@@ -228,7 +228,7 @@ def load_config():
     configs = [
         {
             "agent": "simlingo",
-            "checkpoint": "simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt",
+            "checkpoint": "simlingo/simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt",
             "benchmark": "bench2drive",
             "route_path": os.path.join(repo_root, "leaderboard/data/bench2drive_split"),
             "seeds": [1, 2, 3],

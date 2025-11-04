@@ -25,7 +25,7 @@ def main(cfg: TrainConfig):
 
     qa_dataset = cfg.data_module.qa_dataset
     insteval_dataset = cfg.data_module.insteval_dataset
-    load_path = '/YOUR_PATH/outputs/simlingo/checkpoints/epoch=013.ckpt'
+    load_path = 'simlingo/simlingo/checkpoints/epoch=013.ckpt'
     if load_path is not None:
         load_path_config = Path(load_path).parent.parent / '.hydra/config.yaml'
         cfg = OmegaConf.load(load_path_config)
