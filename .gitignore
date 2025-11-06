@@ -181,7 +181,6 @@ checkpoints/
 pretrained/
 
 # Specific directories with large files
-simlingo/checkpoints/
-simlingo/buckets_paths.pkl
+simlingo/
 pretrained/
 
