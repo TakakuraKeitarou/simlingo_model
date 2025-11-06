@@ -4,6 +4,7 @@ pretrained/
 results/
 outputs/
 eval/
+simlingo
 eval_results/
 pretrained/
 .cache/

@@ -68,6 +68,11 @@ cd simlingo
 git lfs pull
 ```
 
+## モデルの推論
+
+```
+python3 start_eval_simlingo.py
+```
 ## 動作確認
 
 環境が正しくセットアップされたか確認するには:
